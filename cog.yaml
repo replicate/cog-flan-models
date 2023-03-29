@@ -17,6 +17,7 @@ build:
     - "accelerate"
     - "peft"
     - "sentencepiece"
+    - "bitsandbytes"
 
 # predict.py defines how predictions are run on your model
 predict: "predict.py:Predictor"

@@ -3,10 +3,16 @@ import json
 import argparse
 
 from transformers import T5ForConditionalGeneration, T5Tokenizer
-from peft import PeftModel
 from torch.utils.data import Dataset
 import torch
 from transformers import Trainer, TrainingArguments
+from peft import (
+    prepare_model_for_int8_training,
+    LoraConfig,
+    get_peft_model,
+    TaskType
+)
+
 
 # Would be good to add some sort of "tuner" entity here s.t. we're not just running 
 
@@ -112,9 +118,29 @@ def load_model(model_name_or_path):
     return model, tokenizer
 
 
+def load_peft_model(model_name_or_path, args):
+    model = T5ForConditionalGeneration.from_pretrained(model_name_or_path, cache_dir="pretrained_weights", load_in_8bit=True, device_map="auto")
+    model = prepare_model_for_int8_training(model)
+    config = LoraConfig(
+        r=8,
+        lora_alpha=16,
+        lora_dropout=0.1,
+        bias='none',
+        task_type=TaskType.SEQ_2_SEQ_LM
+    )
+    model = get_peft_model(model, config)
+    tokenizer = T5Tokenizer.from_pretrained(model_name_or_path, cache_dir="pretrained_weights")
+    return model, tokenizer
+
+
+
 def train(args): 
     print('loading model')
-    model, tokenizer = load_model(args.model_name_or_path)
+    if args.peft:
+        print("peft!")
+        model, tokenizer = load_peft_model(args.model_name_or_path, args)
+    else:
+        model, tokenizer = load_model(args.model_name_or_path)
     print('loading dataset')
     dataset = load_json(args.data_path)
     p = Preprocessor(tokenizer)
@@ -137,13 +163,11 @@ def train(args):
             lr_scheduler_type='cosine',
             warmup_ratio=args.warmup_ratio,
             num_train_epochs=args.epochs,
-            learning_rate=args.learning_rate,
-            fsdp='full_shard'
+            learning_rate=args.learning_rate
             ),
         data_collator=DataCollatorForSupervisedDataset(tokenizer),
     )
     trainer.train()
-
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Fine-tune a language model on a text dataset")
@@ -155,6 +179,7 @@ if __name__ == '__main__':
     parser.add_argument("--learning_rate", type=float, default=2e-5, help="Learning rate for the optimizer")
     parser.add_argument("--batch_size", type=int, default=4, help="Batch size for training")
     parser.add_argument("--warmup_ratio", type=float, default=0.03, help="Number of warmup steps for the learning rate scheduler")
+    parser.add_argument("--peft", action="store_true", help="train w/lora or not")
 
     args = parser.parse_args()
     train(args)
