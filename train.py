@@ -40,6 +40,7 @@ class DatasetBuilder:
                 prompt,
                 return_tensors="pt",
                 padding="longest",
+                truncation=True
             ).input_ids
             for prompt in texts
         ]
@@ -48,7 +49,7 @@ class DatasetBuilder:
     def construct_dataset(self, input_data):
         prompts = [val['prompt'] for val in input_data]
         tokenized_input_ids = self.batch_tokenize(prompts)
-        labels = [val["output"] for val in input_data]
+        labels = [val["completion"] for val in input_data]
         tokenized_labels = self.batch_tokenize(labels)
         return TuneDataset(tokenized_input_ids, tokenized_labels)
 
@@ -84,6 +85,7 @@ class CustomDataCollatorSeq2Seq:
         labels = torch.nn.utils.rnn.pad_sequence(
             labels, batch_first=True, padding_value=-100
         )  # -100 tells torch to ignore these tokens in loss computation.
+
         return dict(
             input_ids=input_ids,
             labels=labels,
@@ -180,7 +182,9 @@ def train(
             num_train_epochs=num_train_epochs,
             learning_rate=learning_rate,
             max_steps=max_steps,
-            fsdp="full_shard auto_wrap"
+            deepspeed='ds_config/ds_z3_bf16_config.json',
+            # fsdp="full_shard auto_wrap",
+            bf16=True
         ),
         data_collator=CustomDataCollatorSeq2Seq(tokenizer),
     )
