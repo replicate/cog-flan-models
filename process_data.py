@@ -40,7 +40,7 @@ class Preprocessor:
 
     def construct_dataset(self, input_data):
         prompts = [self.make_prompt(val) for val in input_data]
-        return [{'prompt':val[0], 'output':val[1]} for val in zip(prompts, [val["output"] for val in input_data])]
+        return [{'prompt':val[0], 'completion':val[1]} for val in zip(prompts, [val["output"] for val in input_data])]
 
 if __name__ == '__main__':
     proc = Preprocessor(T5Tokenizer.from_pretrained('google/flan-t5-xl'))

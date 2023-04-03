@@ -45,7 +45,7 @@ class DatasetBuilder:
     def construct_dataset(self, input_data):
         prompts = [val['prompt'] for val in input_data]
         tokenized_input_ids = self.batch_tokenize(prompts)
-        labels = [val["output"] for val in input_data]
+        labels = [val["completion"] for val in input_data]
         tokenized_labels = self.batch_tokenize(labels)
         return TuneDataset(tokenized_input_ids, tokenized_labels)
 
