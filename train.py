@@ -11,6 +11,7 @@ import torch
 from transformers import Trainer, TrainingArguments
 from cog import Input, BaseModel, Path, File
 from tensorizer import TensorSerializer
+from peft import prepare_model_for_int8_training, LoraConfig, get_peft_model, TaskType
 
 MODEL_OUT = "/src/tuned_weights.tensors"
 CHECKPOINT_DIR = "checkpoints"
@@ -104,10 +105,24 @@ def load_model(model_name_or_path):
 
     return model
 
+
+def load_peft_model(model_name_or_path, lora_rank: int, lora_alpha: int, lora_dropout: float):
+    model = load_model(model_name_or_path)
+    config = LoraConfig(
+        r = lora_rank,
+        lora_alpha=lora_alpha,
+        lora_dropout=lora_dropout,
+        bias='none',
+        task_type=TaskType.SEQ_2_SEQ_LM
+    )
+    model = get_peft_model(model, config)
+    return model
+
+
 def train(
     train_data: Path = Input(description="path to data file to use for fine-tuning your model"),
     eval_data: Path = Input(description="path to optional evaluation data file to use for model eval", default=None),
-    model_weights: Path = Input(description="location of weights that are going to be fine-tuned", default=None),
+    weights: Optional[Path] = Input(description="location of weights that are going to be fine-tuned", default=None),
     train_batch_size: int = Input(description="batch size per GPU", default=8, ge=1),
     gradient_accumulation_steps: int = Input(description="number of training steps to update gradient for before performing a backward pass", default=8),
     lr_scheduler_type: str = Input(description="learning rate scheduler", default="cosine", choices=["linear", "cosine", 'cosine_with_restarts', 'polynomial', 'inverse_sqrt', 'constant', 'constant_with_warmup']),
@@ -116,12 +131,20 @@ def train(
     num_train_epochs: int = Input(description="number of training epochs", ge=1, default=1),
     max_steps: int = Input(description="number of steps to run training for, supersedes num_train_epochs", default=None, ge=0),
     logging_steps: int = Input(description="number of steps between logging epoch & loss", default=1),
+    peft: bool = Input(description="fine-tune model using lora w/peft", default=False),
+    lora_rank: int = Input(description="if training lora, rank of lora matrices", default=8),
+    lora_alpha: int = Input(description="alpha if training lora", default=8),
+    lora_dropout: float = Input(description="dropout if training lora", default=0.1)
 ) -> TrainingOutput:  
     reset_dir(CHECKPOINT_DIR)
     if os.path.exists(MODEL_OUT):
         os.remove(MODEL_OUT)
     print("loading model")
-    model = load_model(model_weights)
+    if peft:
+        print("training lora!")
+        model = load_peft_model(weights, lora_rank, lora_alpha, lora_dropout)
+    else:
+        model = load_model(weights)
     tokenizer = load_tokenizer()
     print("loading dataset")
     print(train_data)
