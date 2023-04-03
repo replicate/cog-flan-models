@@ -1,11 +1,10 @@
 #!/bin/bash
 
 torchrun --nproc_per_node=4 --master_port=9292 train.py \
-    --model_name_or_path google/flan-t5-xxl \
-    --data_path ./alpaca_data.json \
-    --epochs 3 \
-    --learning_rate 3e-4 \
-    --batch_size 8 \
-    --warmup_ratio 0.03 \
-    --output_path flan-t5-xxl-out \
-    --peft
+    --train_data ./replicate_alpaca_data.json \
+    --num_train_epochs 4 \
+    --learning_rate 5e-4 \
+    --train_batch_size 8 \
+    --gradient_accumulation_steps 8 \
+    --logging_steps 2 \
+    --warmup_ratio 0.03 

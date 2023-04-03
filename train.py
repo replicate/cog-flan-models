@@ -7,6 +7,7 @@ from config import HUGGINGFACE_MODEL_NAME, load_tokenizer
 
 from transformers import T5ForConditionalGeneration
 from torch.utils.data import Dataset
+import torch.distributed as dist
 import torch
 from transformers import Trainer, TrainingArguments
 from cog import Input, BaseModel, Path, File
@@ -18,9 +19,10 @@ CHECKPOINT_DIR = "checkpoints"
 SAVE_STRATEGY = "epoch"
 
 def reset_dir(directory):
-    if os.path.exists(directory):
-        shutil.rmtree(directory)
-    os.makedirs(directory)
+    if not dist.is_initialized() or (dist.is_initialized() and dist.get_rank() == 0):
+        if os.path.exists(directory):
+            shutil.rmtree(directory)
+        os.makedirs(directory)
 
 class TrainingOutput(BaseModel):
     weights: Path
@@ -107,7 +109,12 @@ def load_model(model_name_or_path):
 
 
 def load_peft_model(model_name_or_path, lora_rank: int, lora_alpha: int, lora_dropout: float):
-    model = load_model(model_name_or_path)
+    if model_name_or_path is None:
+        model_name_or_path = HUGGINGFACE_MODEL_NAME
+    model = T5ForConditionalGeneration.from_pretrained(
+        model_name_or_path, cache_dir="pretrained_weights", torch_dtype=torch.float16, load_in_8bit=True, device_map="auto"
+    )    
+    model = prepare_model_for_int8_training(model)
     config = LoraConfig(
         r = lora_rank,
         lora_alpha=lora_alpha,
@@ -172,7 +179,8 @@ def train(
             warmup_ratio=warmup_ratio,
             num_train_epochs=num_train_epochs,
             learning_rate=learning_rate,
-            max_steps=max_steps
+            max_steps=max_steps,
+            fsdp="full_shard auto_wrap"
         ),
         data_collator=CustomDataCollatorSeq2Seq(tokenizer),
     )
@@ -193,10 +201,13 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "--data_path", type=Path, required=True, help="Path to the json dataset"
+        "--train_data", type=Path, required=True, help="Path to the json dataset"
     )
     parser.add_argument(
-        "--model_name_or_path",
+        "--eval_data", type=Path, required=False, help="Path to the json dataset", default=None
+    )
+    parser.add_argument(
+        "--weights",
         type=str,
         default=None,
         help="The model class to fine-tune on HF or as a local path (e.g. 'google/flan-t5-xxl'",
@@ -222,10 +233,47 @@ if __name__ == "__main__":
     parser.add_argument(
         "--max_steps",
         type=int,
-        required=False,
+        default=0,
         help="Number of training steps to run, overrides num_train_epochs, useful for testing",
     )
-
+    parser.add_argument(
+        "--gradient_accumulation_steps",
+        type=int,
+        default=8,
+        help="Number of training steps to run, overrides num_train_epochs, useful for testing",
+    )
+    parser.add_argument(
+        "--peft",
+        action="store_true"
+    )
+    parser.add_argument(
+        "--lora_rank",
+        type=int,
+        default=16,
+        help="Number of training steps to run, overrides num_train_epochs, useful for testing",
+    )
+    parser.add_argument(
+        "--lora_alpha",
+        type=int,
+        default=16,
+        help="Number of training steps to run, overrides num_train_epochs, useful for testing",
+    )
+    parser.add_argument(
+        "--lora_dropout",
+        type=float,
+        default=0.4,
+        help="Number of training steps to run, overrides num_train_epochs, useful for testing",
+    )
+    parser.add_argument(
+        "--logging_steps",
+        type=int,
+        default=1
+    )
+    parser.add_argument(
+        "--lr_scheduler_type",
+        type=str,
+        default='cosine',
+    )
     some_args = parser.parse_args()
     train(**vars(some_args))
 
