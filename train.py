@@ -63,8 +63,7 @@ def train(
     ),
     max_steps: int = Input(
         description="number of steps to run training for, supersedes num_train_epochs",
-        default=-1,
-        ge=0,
+        default=-1
     ),
     logging_steps: int = Input(
         description="number of steps between logging epoch & loss", default=1
