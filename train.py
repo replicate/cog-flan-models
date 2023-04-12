@@ -103,7 +103,7 @@ def train(
     if os.path.exists(MODEL_OUT):
         os.remove(MODEL_OUT)
 
-    model = T5ForConditionalGeneration.from_pretrained(output_dir).to("cuda")
+    model = T5ForConditionalGeneration.from_pretrained(output_dir, torch_dtype=torch.float16)
     serializer = TensorSerializer(MODEL_OUT)
     serializer.write_module(model)
     serializer.close()
