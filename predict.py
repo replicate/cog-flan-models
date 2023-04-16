@@ -1,4 +1,7 @@
+import logging
 import os
+import re
+import subprocess
 import time
 from collections import OrderedDict
 from typing import Any, List, Optional
@@ -16,6 +19,7 @@ from subclass import YieldingT5
 
 class Predictor(BasePredictor):
     def setup(self, weights: Optional[Path] = None):
+        weights=Path("/src/tuned_weights.tensors")
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         if weights is not None and weights.name == "weights":
             # bugfix
@@ -40,21 +44,41 @@ class Predictor(BasePredictor):
         model.to(self.device)
         print(f"weights loaded in {time.time() - st}")
         return model
-
+    
     def load_tensorizer(self, weights):
         st = time.time()
-        print(f"deserializing weights from {weights}")
-        config = AutoConfig.from_pretrained(HUGGINGFACE_MODEL_NAME)
+        weights = str(weights)
+        pattern = r'https://pbxt\.replicate\.delivery/([^/]+/[^/]+)'
+        match = re.search(pattern, weights)
+        if match:
+            weights = f"gs://replicate-files/{match.group(1)}"
 
+
+        print(f"deserializing weights")
+        local_weights = "/src/llama_tensors"
+        command = (
+            f"/gc/google-cloud-sdk/bin/gcloud storage cp {weights} {local_weights}".split()
+        )
+        res = subprocess.run(command)
+        if res.returncode != 0:
+            raise Exception(
+                f"gcloud storage cp command failed with return code {res.returncode}: {res.stderr.decode('utf-8')}"
+            )
+        config = AutoConfig.from_pretrained(CONFIG_LOCATION)
+
+        logging.disable(logging.WARN)
         model = no_init_or_tensor(
             lambda: YieldingT5.from_pretrained(
                 None, config=config, state_dict=OrderedDict()
             )
         )
-        des = TensorDeserializer(weights, plaid_mode=True)
+        logging.disable(logging.NOTSET)
+
+        des = TensorDeserializer(local_weights, plaid_mode=True)
         des.load_into_module(model)
         print(f"weights loaded in {time.time() - st}")
         return model
+
 
     def predict(
         self,
