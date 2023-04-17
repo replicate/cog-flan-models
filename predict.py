@@ -51,7 +51,7 @@ class Predictor(BasePredictor):
             weights = f"gs://replicate-files/{match.group(1)}"
 
         print(f"deserializing weights")
-        local_weights = "/src/llama_tensors"
+        local_weights = "/src/flan_tensors"
         command = f"/gc/google-cloud-sdk/bin/gcloud storage cp {weights} {local_weights}".split()
         res = subprocess.run(command)
         if res.returncode != 0:
