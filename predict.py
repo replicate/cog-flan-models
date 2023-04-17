@@ -16,10 +16,10 @@ from transformers import (AutoConfig, AutoModelForSeq2SeqLM,
 from config import HUGGINGFACE_MODEL_NAME, load_tokenizer
 from subclass import YieldingT5
 
+os.environ['COG_WEIGHTS'] = "https://pbxt.replicate.delivery/dREGgc29yY4fUCIo0b0NPFeukb6F5xJ7FfrueFBiXnUCSmGDB/tuned_weights.tensors"
 
 class Predictor(BasePredictor):
     def setup(self, weights: Optional[Path] = None):
-        weights=Path("/src/tuned_weights.tensors")
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         if weights is not None and weights.name == "weights":
             # bugfix
@@ -64,7 +64,7 @@ class Predictor(BasePredictor):
             raise Exception(
                 f"gcloud storage cp command failed with return code {res.returncode}: {res.stderr.decode('utf-8')}"
             )
-        config = AutoConfig.from_pretrained(CONFIG_LOCATION)
+        config = AutoConfig.from_pretrained(HUGGINGFACE_MODEL_NAME)
 
         logging.disable(logging.WARN)
         model = no_init_or_tensor(
