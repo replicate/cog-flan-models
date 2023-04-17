@@ -1,22 +1,19 @@
 import logging
-import os
 import re
 import subprocess
 import time
 from collections import OrderedDict
-from typing import Any, List, Optional
+from typing import Optional
 
 import torch
 from cog import BasePredictor, ConcatenateIterator, Input, Path
 from tensorizer import TensorDeserializer
 from tensorizer.utils import no_init_or_tensor
-from transformers import (AutoConfig, AutoModelForSeq2SeqLM,
-                          T5ForConditionalGeneration)
+from transformers import AutoConfig, T5ForConditionalGeneration
 
 from config import HUGGINGFACE_MODEL_NAME, load_tokenizer
 from subclass import YieldingT5
 
-os.environ['COG_WEIGHTS'] = "https://pbxt.replicate.delivery/dREGgc29yY4fUCIo0b0NPFeukb6F5xJ7FfrueFBiXnUCSmGDB/tuned_weights.tensors"
 
 class Predictor(BasePredictor):
     def setup(self, weights: Optional[Path] = None):
@@ -44,21 +41,18 @@ class Predictor(BasePredictor):
         model.to(self.device)
         print(f"weights loaded in {time.time() - st}")
         return model
-    
+
     def load_tensorizer(self, weights):
         st = time.time()
         weights = str(weights)
-        pattern = r'https://pbxt\.replicate\.delivery/([^/]+/[^/]+)'
+        pattern = r"https://pbxt\.replicate\.delivery/([^/]+/[^/]+)"
         match = re.search(pattern, weights)
         if match:
             weights = f"gs://replicate-files/{match.group(1)}"
 
-
         print(f"deserializing weights")
         local_weights = "/src/llama_tensors"
-        command = (
-            f"/gc/google-cloud-sdk/bin/gcloud storage cp {weights} {local_weights}".split()
-        )
+        command = f"/gc/google-cloud-sdk/bin/gcloud storage cp {weights} {local_weights}".split()
         res = subprocess.run(command)
         if res.returncode != 0:
             raise Exception(
@@ -78,7 +72,6 @@ class Predictor(BasePredictor):
         des.load_into_module(model)
         print(f"weights loaded in {time.time() - st}")
         return model
-
 
     def predict(
         self,
