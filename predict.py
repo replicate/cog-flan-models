@@ -1,14 +1,15 @@
-import os
+import logging
+import re
+import subprocess
 import time
 from collections import OrderedDict
-from typing import Any, List, Optional
+from typing import Optional
 
 import torch
 from cog import BasePredictor, ConcatenateIterator, Input, Path
 from tensorizer import TensorDeserializer
 from tensorizer.utils import no_init_or_tensor
-from transformers import (AutoConfig, AutoModelForSeq2SeqLM,
-                          T5ForConditionalGeneration)
+from transformers import AutoConfig, T5ForConditionalGeneration
 
 from config import HUGGINGFACE_MODEL_NAME, load_tokenizer
 from subclass import YieldingT5
@@ -43,15 +44,31 @@ class Predictor(BasePredictor):
 
     def load_tensorizer(self, weights):
         st = time.time()
-        print(f"deserializing weights from {weights}")
+        weights = str(weights)
+        pattern = r"https://pbxt\.replicate\.delivery/([^/]+/[^/]+)"
+        match = re.search(pattern, weights)
+        if match:
+            weights = f"gs://replicate-files/{match.group(1)}"
+
+        print(f"deserializing weights")
+        local_weights = "/src/flan_tensors"
+        command = f"/gc/google-cloud-sdk/bin/gcloud storage cp {weights} {local_weights}".split()
+        res = subprocess.run(command)
+        if res.returncode != 0:
+            raise Exception(
+                f"gcloud storage cp command failed with return code {res.returncode}: {res.stderr.decode('utf-8')}"
+            )
         config = AutoConfig.from_pretrained(HUGGINGFACE_MODEL_NAME)
 
+        logging.disable(logging.WARN)
         model = no_init_or_tensor(
             lambda: YieldingT5.from_pretrained(
                 None, config=config, state_dict=OrderedDict()
             )
         )
-        des = TensorDeserializer(weights, plaid_mode=True)
+        logging.disable(logging.NOTSET)
+
+        des = TensorDeserializer(local_weights, plaid_mode=True)
         des.load_into_module(model)
         print(f"weights loaded in {time.time() - st}")
         return model
