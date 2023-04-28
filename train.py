@@ -34,7 +34,7 @@ def train(
     train_batch_size: int = Input(description="batch size per GPU", default=4, ge=1),
     gradient_accumulation_steps: int = Input(
         description="number of training steps to update gradient for before performing a backward pass",
-        default=8,
+        default=1,
     ),
     learning_rate: float = Input(
         description="learning rate, for learning!", default=2e-5, ge=0
@@ -53,13 +53,18 @@ def train(
         default=-1
     ),
     logging_steps: int = Input(
-        description="number of steps between logging epoch & loss", default=1
+        description="number of steps between logging epoch & loss", default=100
+    ),
+    gradient_checkpointing: bool = Input(
+        description="whether to use gradient checkpointing to save memory at the cost of speed",
+        default=True
     ),
 ) -> TrainingOutput:
+    print(locals())
     input_model = weights if weights is not None else HUGGINGFACE_MODEL_NAME
 
     root_path = os.getcwd()
-    deepspeed_config = os.path.join(root_path, "ds_config/ds_z3_bf16_config.json")
+    deepspeed_config = os.path.join(root_path, "ds_config/ds_flan_t5_z3_config_bf16_no_offload.json")
 
     output_dir = DIST_OUT_DIR
     os.makedirs(output_dir, exist_ok=True)
@@ -95,6 +100,7 @@ def train(
         + f" --gradient_accumulation_steps {gradient_accumulation_steps}"
         + f" --logging_steps {logging_steps}"
         + f" --warmup_ratio {warmup_ratio}"
+        + f" --gradient_checkpointing {gradient_checkpointing}"
         + " --local_output_dir "
         + output_dir,
         shell=True,
@@ -158,14 +164,20 @@ if __name__ == "__main__":
     parser.add_argument(
         "--gradient_accumulation_steps",
         type=int,
-        default=8,
+        default=1,
         help="Number of training steps to run, overrides num_train_epochs, useful for testing",
     )
-    parser.add_argument("--logging_steps", type=int, default=1)
+    parser.add_argument("--logging_steps", type=int, default=100)
     parser.add_argument(
         "--lr_scheduler_type",
         type=str,
         default="cosine",
+    )
+    parser.add_argument(
+        "--gradient_checkpointing", 
+        type=bool, 
+        default=True, 
+        help="Path to deepspeed config file."
     )
     some_args = parser.parse_args()
     train(**vars(some_args))
