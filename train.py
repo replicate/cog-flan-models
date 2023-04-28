@@ -53,14 +53,13 @@ def train(
         default=-1
     ),
     logging_steps: int = Input(
-        description="number of steps between logging epoch & loss", default=100
+        description="number of steps between logging epoch & loss", default=1
     ),
     gradient_checkpointing: bool = Input(
         description="whether to use gradient checkpointing to save memory at the cost of speed",
         default=True
     ),
 ) -> TrainingOutput:
-    print(locals())
     input_model = weights if weights is not None else HUGGINGFACE_MODEL_NAME
 
     root_path = os.getcwd()
