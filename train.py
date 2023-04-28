@@ -53,7 +53,7 @@ def train(
         default=-1
     ),
     logging_steps: int = Input(
-        description="number of steps between logging epoch & loss", default=1
+        description="number of steps between logging epoch & loss", default=2
     ),
     gradient_checkpointing: bool = Input(
         description="whether to use gradient checkpointing to save memory at the cost of speed",
