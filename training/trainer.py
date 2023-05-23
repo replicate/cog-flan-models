@@ -122,11 +122,13 @@ def load_json(path):
     return data
 
 
-def load_model(model_name_or_path):
+def load_model(model_name_or_path, gradient_checkpointing):
     if model_name_or_path is None:
         model_name_or_path = HUGGINGFACE_MODEL_NAME
     model = T5ForConditionalGeneration.from_pretrained(
-        model_name_or_path, cache_dir="pretrained_weights"
+        model_name_or_path, 
+        cache_dir="pretrained_weights",   
+        use_cache=False if gradient_checkpointing else True    
     )
 
     return model
@@ -170,7 +172,7 @@ def train(
     train_batch_size: int = Input(description="batch size per GPU", default=8, ge=1),
     gradient_accumulation_steps: int = Input(
         description="number of training steps to update gradient for before performing a backward pass",
-        default=8,
+        default=1,
     ),
     lr_scheduler_type: str = Input(
         description="learning rate scheduler",
@@ -208,13 +210,14 @@ def train(
     local_output_dir: str = None,
     deepspeed: str = None,
     local_rank: int = -1,
+    gradient_checkpointing: bool = True,
 ) -> None:
     print("Loading model...")
 
     # if peft:
     #     print("training lora!")
     #     model = load_peft_model(weights, lora_rank, lora_alpha, lora_dropout)
-    model = load_model(weights)
+    model = load_model(weights, gradient_checkpointing)
     tokenizer = load_tokenizer()
 
     print(f"Loading dataset {train_data}...")
@@ -244,10 +247,11 @@ def train(
             learning_rate=learning_rate,
             deepspeed=deepspeed,
             max_steps=max_steps,
-            tf32=True,
+            fp16=False,
             bf16=True,
             half_precision_backend="cuda_amp",
             local_rank=local_rank,
+            gradient_checkpointing=gradient_checkpointing,
         ),
         data_collator=CustomDataCollatorSeq2Seq(tokenizer, 8),  # depends on bf16 value
     )
@@ -326,6 +330,12 @@ if __name__ == "__main__":
         type=int,
         default=-1,
         help="Provided by deepspeed to identify which instance this process is when performing multi-GPU training.",
+    )
+    parser.add_argument(
+        "--gradient_checkpointing", 
+        type=bool, 
+        default=True, 
+        help="Path to deepspeed config file."
     )
     some_args = parser.parse_args()
     train(**vars(some_args))
